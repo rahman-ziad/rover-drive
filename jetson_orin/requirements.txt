@@ -1,0 +1,7 @@
+# Primary serial transport (Orin <-> ESP32 via USB cable)
+pyserial>=3.5
+
+# Optional: PyBluez for future phone Bluetooth control
+# Install only if you need Bluetooth support:
+#   pip install PyBluez>=0.23
+# On Jetson/Ubuntu you also need: sudo apt install libbluetooth-dev

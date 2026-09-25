@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rover Control</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101313;
+      --panel: #1a1f1e;
+      --panel-light: #252c2a;
+      --text: #f3f0e7;
+      --muted: #aab3ad;
+      --accent: #e8b04a;
+      --danger: #d8615c;
+      --line: #39423f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #24302b 0, var(--bg) 46rem);
+      color: var(--text);
+      font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(100% - 2rem, 60rem);
+      margin: 0 auto;
+      padding: 2rem 0 3rem;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h1, h2, p { margin-top: 0; }
+    h1 { margin-bottom: .25rem; letter-spacing: -.04em; font-size: clamp(2rem, 6vw, 3.5rem); }
+    h2 { margin-bottom: .8rem; font-size: 1rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .subtitle { margin-bottom: 0; color: var(--muted); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .status::before {
+      width: .65rem;
+      height: .65rem;
+      border-radius: 50%;
+      background: var(--danger);
+      content: "";
+    }
+
+    .status.connected::before { background: #66c28b; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 1fr);
+      gap: 1rem;
+    }
+
+    section {
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      padding: 1.25rem;
+      box-shadow: 0 1rem 3rem #0004;
+    }
+
+    .drive-panel { grid-row: span 2; }
+
+    .pad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .7rem;
+      max-width: 22rem;
+      margin: 1.5rem auto .75rem;
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      min-height: 4rem;
+      border: 1px solid var(--line);
+      border-radius: .75rem;
+      background: var(--panel-light);
+      color: var(--text);
+      cursor: pointer;
+      touch-action: none;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+
+    button:hover { border-color: var(--accent); }
+    button:active, button.active { transform: translateY(2px); background: #665329; border-color: var(--accent); }
+    button.stop { background: #482624; border-color: #79413d; }
+    button.stop:hover, button.stop:active { background: #71312e; border-color: var(--danger); }
+    button.drive { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem; }
+    .arrow { font-size: 1.6rem; line-height: 1; }
+    .empty { visibility: hidden; }
+    .hint { color: var(--muted); text-align: center; font-size: .9rem; }
+
+    form { display: flex; gap: .6rem; }
+    input {
+      min-width: 0;
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: .6rem;
+      background: #111615;
+      color: var(--text);
+      padding: .7rem .8rem;
+      text-transform: uppercase;
+    }
+
+    form button { min-height: auto; padding: .7rem 1rem; }
+    .quick { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+    .quick button { min-height: auto; padding: .5rem .8rem; font-size: .9rem; }
+    .telemetry-panel { grid-column: 1 / -1; }
+    .connection-grid, .sensor-grid { display: grid; gap: .7rem; }
+    .connection-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 1rem; }
+    .sensor-grid { grid-template-columns: repeat(4, 1fr); }
+    .stat, .metric { border: 1px solid var(--line); border-radius: .6rem; background: #111615; padding: .8rem; }
+    .stat span, .metric h3 { display: block; margin: 0 0 .35rem; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+    .stat strong { font-size: .95rem; }
+    .metric code { color: var(--text); font: .9rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+    pre {
+      min-height: 8rem;
+      max-height: 16rem;
+      overflow: auto;
+      margin: 0;
+      border-radius: .6rem;
+      background: #101413;
+      color: #c6d0c9;
+      padding: .8rem;
+      font: .78rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .port-row {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin: .75rem 0 .5rem;
+      flex-wrap: wrap;
+    }
+    .port-row label { color: var(--muted); font-size: .88rem; white-space: nowrap; }
+    .port-row select {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: .5rem;
+      background: #111615;
+      color: var(--text);
+      padding: .45rem .6rem;
+      font: inherit;
+      font-size: .88rem;
+    }
+    .port-row button {
+      min-height: auto;
+      padding: .45rem .9rem;
+      font-size: .88rem;
+    }
+
+    .notice { color: var(--muted); font-size: .9rem; }
+
+    @media (max-width: 42rem) {
+      main { width: min(100% - 1rem, 36rem); padding-top: 1rem; }
+      header { align-items: start; flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+      .drive-panel { grid-row: auto; }
+      section { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Rover control</h1>
+        <p class="subtitle">Hold a direction to drive. Release it to stop.</p>
+      </div>
+      <div id="status" class="status">checking bridge</div>
+    </header>
+
+    <div class="grid">
+      <section class="drive-panel">
+        <h2>Drive</h2>
+        <div class="pad" aria-label="Drive controls">
+          <button class="empty" tabindex="-1" aria-hidden="true"></button>
+          <button class="drive" data-command="F" data-source="up"><span class="arrow" aria-hidden="true">&#9650;</span>UP</button>
+          <button class="empty" tabindex="-1" aria-hidden="true"></button>
+          <button class="drive" data-command="L" data-source="left"><span class="arrow" aria-hidden="true">&#9664;</span>LEFT</button>
+          <button class="stop" id="stop">STOP</button>
+          <button class="drive" data-command="R" data-source="right"><span class="arrow" aria-hidden="true">&#9654;</span>RIGHT</button>
+          <button class="empty" tabindex="-1" aria-hidden="true"></button>
+          <button class="drive" data-command="B" data-source="down"><span class="arrow" aria-hidden="true">&#9660;</span>DOWN</button>
+          <button class="empty" tabindex="-1" aria-hidden="true"></button>
+        </div>
+        <p class="hint">Keyboard: Arrow keys. Hold a virtual arrow or key to move; release to stop.</p>
+      </section>
+
+      <section>
+        <h2>Command</h2>
+        <form id="command-form">
+          <input id="command" autocomplete="off" placeholder="F5, S, RL90" aria-label="Rover command">
+          <button type="submit">Send</button>
+        </form>
+        <div class="quick" aria-label="Quick commands">
+          <button class="quick-command" data-command="F5">F5</button>
+          <button class="quick-command" data-command="S">S</button>
+          <button class="quick-command" data-command="RL90">RL90</button>
+          <button class="quick-command" data-command="RR90">RR90</button>
+        </div>
+        <p class="notice">Commands are relayed to the ESP32 over USB (serial). Bluetooth is reserved for phone control.</p>
+      </section>
+
+      <section>
+        <h2>Rover messages</h2>
+        <pre id="messages">No telemetry received yet.</pre>
+      </section>
+
+      <section class="telemetry-panel">
+        <h2>Connections and telemetry</h2>
+        <div class="connection-grid">
+          <div class="stat"><span>Serial link</span><strong id="orin-link">checking</strong></div>
+          <div class="stat"><span>Mobile client</span><strong id="mobile-client">not connected</strong></div>
+          <div class="stat"><span>Laptop / Orin client</span><strong id="laptop-client">not connected</strong></div>
+        </div>
+        <div class="port-row">
+          <label for="port-select">USB port:</label>
+          <select id="port-select"><option value="">-- auto-detect --</option></select>
+          <label for="baud-select">Baud:</label>
+          <select id="baud-select">
+            <option value="115200" selected>115200</option>
+            <option value="9600">9600</option>
+            <option value="57600">57600</option>
+            <option value="230400">230400</option>
+            <option value="500000">500000</option>
+            <option value="921600">921600</option>
+          </select>
+          <button id="port-connect">Connect</button>
+          <button id="port-refresh" title="Refresh port list">&#x21bb;</button>
+        </div>
+        <p id="connect-error" class="notice" style="color:var(--danger);display:none"></p>
+        <p id="client-detail" class="notice">Active ESP32 client: none</p>
+        <div class="sensor-grid">
+          <div class="metric"><h3>Accel raw</h3><code id="accel-raw">waiting...</code></div>
+          <div class="metric"><h3>Accel calibrated</h3><code id="accel-calibrated">waiting...</code></div>
+          <div class="metric"><h3>Gyro raw</h3><code id="gyro-raw">waiting...</code></div>
+          <div class="metric"><h3>Gyro calibrated</h3><code id="gyro-calibrated">waiting...</code></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const HOLD_INTERVAL_MS = 250;
+    const keyCommands = {
+      ArrowUp: "F",
+      ArrowDown: "B",
+      ArrowLeft: "L",
+      ArrowRight: "R"
+    };
+
+    const statusElement = document.getElementById("status");
+    const messagesElement = document.getElementById("messages");
+    const orinLinkElement = document.getElementById("orin-link");
+    const mobileClientElement = document.getElementById("mobile-client");
+    const laptopClientElement = document.getElementById("laptop-client");
+    const clientDetailElement = document.getElementById("client-detail");
+    const telemetryElements = {
+      accel_raw: document.getElementById("accel-raw"),
+      accel_calibrated: document.getElementById("accel-calibrated"),
+      gyro_raw: document.getElementById("gyro-raw"),
+      gyro_calibrated: document.getElementById("gyro-calibrated")
+    };
+    let activeSource = null;
+    let activeCommand = null;
+    let holdTimer = null;
+
+    async function sendCommand(command, quiet = false) {
+      try {
+        const response = await fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command }),
+          keepalive: quiet
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "command failed");
+        updateStatus(payload.transport);
+      } catch (error) {
+        statusElement.textContent = error.message;
+        statusElement.classList.remove("connected");
+      }
+    }
+
+    const portSelect    = document.getElementById("port-select");
+    const baudSelect    = document.getElementById("baud-select");
+    const portConnect   = document.getElementById("port-connect");
+    const portRefresh   = document.getElementById("port-refresh");
+    const connectError  = document.getElementById("connect-error");
+
+    function showConnectError(msg) {
+      connectError.textContent = msg;
+      connectError.style.display = msg ? "" : "none";
+    }
+
+    // ── Port list ─────────────────────────────────────────────────────────────
+    async function loadPorts(currentPort) {
+      try {
+        const res = await fetch("/api/serial_ports", { cache: "no-store" });
+        const data = await res.json();
+        const ports = data.ports || [];
+        const prev = portSelect.value;
+        portSelect.innerHTML = '<option value="">-- auto-detect --</option>';
+        ports.forEach((p) => {
+          const opt = document.createElement("option");
+          opt.value = p;
+          opt.textContent = p;
+          portSelect.appendChild(opt);
+        });
+        if (currentPort && ports.includes(currentPort)) {
+          portSelect.value = currentPort;
+        } else if (prev && ports.includes(prev)) {
+          portSelect.value = prev;
+        }
+      } catch (_) { /* server not ready yet */ }
+    }
+
+    portRefresh.addEventListener("click", () => { showConnectError(""); loadPorts(null); });
+
+    portConnect.addEventListener("click", async () => {
+      showConnectError("");
+      portConnect.disabled = true;
+      portConnect.textContent = "Connecting…";
+      try {
+        const body = JSON.stringify({
+          port: portSelect.value || null,
+          baudrate: parseInt(baudSelect.value) || 115200,
+        });
+        const res = await fetch("/api/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": String(body.length) },
+          body,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showConnectError(data.error || "Connect failed — check the port and try again");
+        } else {
+          updateStatus(data);
+          showConnectError("");
+        }
+      } catch (err) {
+        showConnectError(err.message);
+      } finally {
+        portConnect.disabled = false;
+        portConnect.textContent = "Connect";
+      }
+    });
+
+    // ── Status update ─────────────────────────────────────────────────────────
+    function updateStatus(transport) {
+      if (!transport) return;
+      // NOTE: the API key is "transport" (e.g. "serial"), not "type"
+      const ttype = transport.transport || "";
+      const isSerial = ttype === "serial" || ttype === "dry-run" || ttype === "";
+      const connWord = transport.connected ? "connected" : "disconnected";
+      const prefix = isSerial ? "Serial" : "Bluetooth";
+      const portInfo = (isSerial && transport.port) ? ` (${transport.port})` : "";
+      const label = `${prefix} ${connWord}${portInfo}`;
+      statusElement.textContent = label;
+      statusElement.classList.toggle("connected", Boolean(transport.connected));
+      orinLinkElement.textContent = label;
+      orinLinkElement.style.color = transport.connected ? "#66c28b" : "var(--danger)";
+
+      // Keep dropdown in sync with the active port
+      if (transport.port) loadPorts(transport.port);
+
+      const client = transport.client || {};
+      const clientConnected = Boolean(client.connected);
+      const clientType = String(client.type || "NONE").toUpperCase();
+      const mobileConnected = clientConnected && clientType === "MOBILE";
+      const laptopConnected = clientConnected && clientType === "LAPTOP";
+      mobileClientElement.textContent = mobileConnected ? "CONNECTED" : "not connected";
+      laptopClientElement.textContent = laptopConnected ? "CONNECTED" : "not connected";
+      mobileClientElement.style.color = mobileConnected ? "#66c28b" : "var(--muted)";
+      laptopClientElement.style.color = laptopConnected ? "#66c28b" : "var(--muted)";
+      clientDetailElement.textContent = clientConnected
+        ? `Active ESP32 client: ${clientType} (${client.address || "address unknown"})`
+        : "Active ESP32 client: none";
+
+      const telemetry = transport.telemetry || {};
+      Object.keys(telemetryElements).forEach((key) => {
+        const values = telemetry[key];
+        const decimals = key.startsWith("gyro") ? 3 : 2;
+        telemetryElements[key].textContent = Array.isArray(values)
+          ? values.map((value) => Number(value).toFixed(decimals)).join("  ")
+          : "waiting...";
+      });
+
+      if (transport.messages && transport.messages.length) {
+        messagesElement.textContent = transport.messages.join("\n");
+        messagesElement.scrollTop = messagesElement.scrollHeight;
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch("/api/status", { cache: "no-store" });
+        updateStatus(await response.json());
+      } catch (error) {
+        statusElement.textContent = "server unavailable";
+        statusElement.classList.remove("connected");
+      }
+    }
+
+    function setActiveButton(active) {
+      document.querySelectorAll(".drive").forEach((button) => {
+        button.classList.toggle("active", button === active);
+      });
+    }
+
+    function startHold(source, command, button) {
+      if (activeSource === source) return;
+      stopHold(false);
+      activeSource = source;
+      activeCommand = command;
+      setActiveButton(button || null);
+      sendCommand(command);
+      holdTimer = setInterval(() => {
+        sendCommand(activeCommand, true);
+      }, HOLD_INTERVAL_MS);
+    }
+
+    function stopHold(sendStop = true) {
+      if (holdTimer !== null) clearInterval(holdTimer);
+      holdTimer = null;
+      const wasActive = activeSource !== null;
+      activeSource = null;
+      activeCommand = null;
+      setActiveButton(null);
+      if (sendStop && wasActive) sendCommand("S", true);
+    }
+
+    document.querySelectorAll(".drive").forEach((button) => {
+      const start = (event) => {
+        event.preventDefault();
+        startHold(button, button.dataset.command, button);
+      };
+      button.addEventListener("pointerdown", start);
+      button.addEventListener("pointerup", () => stopHold());
+      button.addEventListener("pointercancel", () => stopHold());
+      button.addEventListener("pointerleave", () => {
+        if (activeSource === button) stopHold();
+      });
+    });
+
+    document.getElementById("stop").addEventListener("click", () => {
+      stopHold(false);
+      sendCommand("S");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const command = keyCommands[event.key];
+      const target = event.target;
+      if (!command || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+      if (!event.repeat) startHold(event.key, command);
+    });
+
+    document.addEventListener("keyup", (event) => {
+      if (keyCommands[event.key] && activeSource === event.key) {
+        event.preventDefault();
+        stopHold();
+      }
+    });
+
+    document.getElementById("command-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      stopHold(false);
+      const input = document.getElementById("command");
+      if (input.value.trim()) sendCommand(input.value.trim());
+      input.select();
+    });
+
+    document.querySelectorAll(".quick-command").forEach((button) => {
+      button.addEventListener("click", () => {
+        stopHold(false);
+        sendCommand(button.dataset.command);
+      });
+    });
+
+    function stopForPageExit() {
+      stopHold(false);
+      const body = new Blob([JSON.stringify({ command: "S" })], { type: "application/json" });
+      navigator.sendBeacon("/api/command", body);
+    }
+
+    window.addEventListener("blur", () => stopHold());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopHold();
+    });
+    window.addEventListener("pagehide", stopForPageExit);
+
+    loadPorts(null);
+    refreshStatus();
+    setInterval(refreshStatus, 1000);
+  </script>
+</body>
+</html>

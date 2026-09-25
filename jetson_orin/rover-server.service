@@ -1,0 +1,14 @@
+[Unit]
+Description=Rover Wi-Fi server (USB-UART bridge to ESP32)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/rover/jetson_orin
+ExecStart=%h/rover/jetson_orin/.venv/bin/python %h/rover/jetson_orin/rover_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
